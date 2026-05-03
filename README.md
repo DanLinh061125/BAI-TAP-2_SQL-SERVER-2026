@@ -401,23 +401,428 @@ FROM DatPhong
 <img width="1910" height="1079" alt="image" src="https://github.com/user-attachments/assets/9e2581cf-0da4-4e8b-94c7-fe7f82b2191f" />
 Hàm fn_TienConLaiPhaiTra được xây dựng để tính số tiền khách còn phải thanh toán sau khi đã trừ tiền đặt cọc. Hàm sử dụng DATEDIFF để tính số ngày ở và ISNULL để xử lý trường hợp khách chưa trả phòng hoặc chưa có tiền cọc.
 
-  + Viết 01 Inline Table-Valued Function: Trả về danh sách các bản ghi theo một điều kiện lọc cụ thể (SV TỰ NGHĨ RA YÊU CẦU CỦA HÀM VÀ VIẾT HÀM GIẢI QUYẾT NÓ)
+  ## + Viết 01 Inline Table-Valued Function: Trả về danh sách các bản ghi theo một điều kiện lọc cụ thể (SV TỰ NGHĨ RA YÊU CẦU CỦA HÀM VÀ VIẾT HÀM GIẢI QUYẾT NÓ). Sau khi đã có hàm, viết câu lệnh sql khai thác hàm đó.
 
-    Sau khi đã có hàm, viết câu lệnh sql khai thác hàm đó.
+    + Inline Table-Valued Function – Danh sách khách hàng có đánh giá cao
+📌 Ý tưởng
 
-  + Viết 01 Multi-statement Table-Valued Function: Thực hiện xử lý logic phức tạp bên trong (có sử dụng biến bảng) trước khi trả về kết quả. (SV TỰ NGHĨ RA YÊU CẦU CỦA HÀM VÀ VIẾT HÀM GIẢI QUYẾT NÓ)
+Trong hệ thống khách sạn, cần xác định những khách hàng có mức đánh giá tốt để:
 
-    Sau khi đã có hàm, viết câu lệnh sql khai thác hàm đó.
+ưu tiên chăm sóc
+áp dụng khuyến mãi
 
+👉 Vì vậy xây dựng hàm:
+
+Trả về danh sách khách hàng có điểm đánh giá ≥ giá trị truyền vào
+
+🔄 Luồng xử lý
+Bước 1: Hàm nhận vào tham số @DiemToiThieu
+Bước 2: Truy vấn bảng KhachHang
+Bước 3: Lọc những khách có điểm ≥ điều kiện
+Bước 4: Trả về danh sách kết quả
+✅ Code
+CREATE FUNCTION fn_KhachHangDanhGiaCao (@DiemToiThieu INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        MaKhachHang,
+        TenKhachHang,
+        SoDienThoai,
+        DiemDanhGia
+    FROM KhachHang
+    WHERE DiemDanhGia >= @DiemToiThieu
+);
+GO
+🔍 Khai thác hàm
+-- Lấy danh sách khách có đánh giá từ 4 trở lên
+SELECT * 
+FROM dbo.fn_KhachHangDanhGiaCao(4)
+ORDER BY DiemDanhGia DESC;
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/6d516c93-72ea-462a-b1d5-5196fbc8748f" />
+                      Tạo function fn_KhachHangDanhGiaCao thành công trong SQL Server
+🔍 Khai thác hàm
+-- Lấy danh sách khách có đánh giá từ 4 trở lên
+SELECT * 
+FROM dbo.fn_KhachHangDanhGiaCao(4)
+ORDER BY DiemDanhGia DESC;
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/62ccee8e-b3a3-477f-b6cd-4af55b63d1e1" />
+Hàm fn_KhachHangDanhGiaCao được sử dụng để lọc danh sách khách hàng dựa trên điểm đánh giá. Hàm nhận vào một ngưỡng điểm tối thiểu và trả về các khách hàng có điểm đánh giá lớn hơn hoặc bằng giá trị đó.
+
+  ## + Viết 01 Multi-statement Table-Valued Function: Thực hiện xử lý logic phức tạp bên trong (có sử dụng biến bảng) trước khi trả về kết quả. (SV TỰ NGHĨ RA YÊU CẦU CỦA HÀM VÀ VIẾT HÀM GIẢI QUYẾT NÓ). Sau khi đã có hàm, viết câu lệnh sql khai thác hàm đó.
+
+    🔥 Multi-statement Table-Valued Function – Báo cáo doanh thu theo từng phòng
+📌 Ý tưởng
+
+Ban quản lý khách sạn cần một báo cáo:
+
+👉 Mỗi phòng trong một tháng cụ thể tạo ra bao nhiêu doanh thu
+
+Ngoài ra, cần phân loại hiệu quả kinh doanh của phòng:
+
+Doanh thu ≥ 10 triệu → Hiệu quả cao
+5 – <10 triệu → Trung bình
+< 5 triệu → Hiệu quả thấp
+🔄 Luồng xử lý
+Bước 1: Nhận vào @Thang, @Nam
+Bước 2: Tạo biến bảng để lưu kết quả
+Bước 3: Lấy dữ liệu từ bảng Phong + DatPhong
+Bước 4: Tính:
+Số ngày ở
+Doanh thu từng lượt
+Bước 5: Cộng dồn doanh thu theo phòng
+Bước 6: Dùng UPDATE để phân loại hiệu quả
+Bước 7: Trả về bảng kết quả
+✅ Code
+CREATE FUNCTION fn_DoanhThuPhongTheoThang (
+    @Thang INT,
+    @Nam INT
+)
+RETURNS @BangKetQua TABLE (
+    MaPhong VARCHAR(10),
+    LoaiPhong NVARCHAR(50),
+    TongDoanhThu MONEY,
+    DanhGia NVARCHAR(50)
+)
+AS
+BEGIN
+    -- Bước 1: Đưa dữ liệu doanh thu cơ bản vào bảng tạm
+    INSERT INTO @BangKetQua (MaPhong, LoaiPhong, TongDoanhThu, DanhGia)
+    SELECT 
+        p.MaPhong,
+        p.LoaiPhong,
+        SUM(
+            CASE 
+                WHEN d.NgayTra IS NULL 
+                    THEN DATEDIFF(DAY, d.NgayNhan, GETDATE()) * p.GiaPhong
+                ELSE 
+                    CASE 
+                        WHEN DATEDIFF(DAY, d.NgayNhan, d.NgayTra) = 0 
+                            THEN 1 * p.GiaPhong
+                        ELSE DATEDIFF(DAY, d.NgayNhan, d.NgayTra) * p.GiaPhong
+                    END
+            END
+        ) AS TongDoanhThu,
+        N'Chưa phân loại'
+    FROM Phong p
+    LEFT JOIN DatPhong d 
+        ON p.MaPhong = d.MaPhong
+        AND MONTH(d.NgayNhan) = @Thang
+        AND YEAR(d.NgayNhan) = @Nam
+    GROUP BY p.MaPhong, p.LoaiPhong;
+
+    -- Bước 2: Phân loại hiệu quả
+    UPDATE @BangKetQua
+    SET DanhGia = 
+        CASE 
+            WHEN TongDoanhThu >= 10000000 THEN N'Hiệu quả cao'
+            WHEN TongDoanhThu >= 5000000 THEN N'Trung bình'
+            ELSE N'Hiệu quả thấp'
+        END;
+
+    RETURN;
+END;
+GO
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/b1d289eb-6f8b-4a0c-9656-c5a80903a516" />
+                    Tạo function báo cáo doanh thu và phân loại hiệu quả phòng
+🔍 Khai thác hàm
+-- Xem doanh thu phòng tháng 10 năm 2023
+SELECT * 
+FROM dbo.fn_DoanhThuPhongTheoThang(10, 2023)
+ORDER BY TongDoanhThu DESC;
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/63e237ba-bb43-4542-935a-a75e3b90af41" />
+                Kết quả truy vấn hàm fn_DoanhThuPhongTheoThang theo tháng và năm
+                
 ### Phần 3: Xây dựng Store Procedure (Kiến thức 10) 
 
-  + Trong SQL Server có những SP có sẵn nào? nêu 1 vài system sp mà em tìm hiểu được, giải thích cách dùng chúng.
+  ## + Trong SQL Server có những SP có sẵn nào? nêu 1 vài system sp mà em tìm hiểu được, giải thích cách dùng chúng.
+Tổng quan về System Stored Procedures trong SQL Server
 
-  + Viết 01 Store Procedure đơn giản để thực hiện lệnh INSERT hoặc UPDATE dữ liệu, có kiểm tra điều kiện logic (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ)
+Trong SQL Server, System Stored Procedures (Các thủ tục lưu trữ hệ thống) là những tập lệnh SQL được biên dịch sẵn do chính Microsoft tạo ra. Chúng thường bắt đầu bằng tiền tố sp_ (viết tắt của system procedure).
 
-  + Viết 01 Store Procedure có sử dụng tham số OUTPUT để trả về một giá trị tính toán (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ, SP NÀY CÓ DÙNG THAM SỐ LOẠI OUTPUT)
+Mục đích chính:
 
-  + Viết 01 Store Procedure trả về một tập kết quả (Result set) từ lệnh SELECT sau khi đã join nhiều bảng. (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ)
+Quản trị hệ thống (System Administration).
+
+Quản lý bảo mật (Security Management).
+
+Lấy thông tin metadata về các đối tượng trong database (bảng, cột, kiểu dữ liệu...).
+
+Bảo trì cơ sở dữ liệu.
+
+Lưu ý quan trọng: Mặc dù các System SP được lưu trữ vật lý trong database ẩn tên là Resource, chúng xuất hiện một cách logic trong schema sys của mọi cơ sở dữ liệu. Bạn có thể thực thi chúng từ bất kỳ database nào.
+
+🔷 Một số System SP tiêu biểu
+🔹 1. sp_help – Xem cấu trúc bảng
+👉 Mục đích
+
+Dùng để hiển thị toàn bộ thông tin của một bảng:
+
+danh sách cột
+kiểu dữ liệu
+khóa chính (PK)
+ràng buộc
+✅ Cách dùng
+1. sp_help: Xem thông tin đối tượng
+Mục đích: Giúp bạn xem toàn bộ cấu trúc của một đối tượng trong database (như Table, View, Stored Procedure, v.v.) mà không cần phải dùng giao diện click chuột rườm rà.
+
+Cách dùng:
+
+EXEC sp_help; (Không tham số): Liệt kê danh sách tất cả các đối tượng trong cơ sở dữ liệu hiện tại.
+
+EXEC sp_help 'Tên_Bảng';: Trả về chi tiết các cột, kiểu dữ liệu, khóa chính (Primary Key), khóa ngoại (Foreign Key), và các Index có trên bảng đó
+-- --------------------------------------------------------------------
+PRINT '--- 1. sp_help: Xem thong tin doi tuong ---';
+
+-- Tạo bảng tạm thời để thử nghiệm
+IF OBJECT_ID('TestHelpTable', 'U') IS NOT NULL DROP TABLE TestHelpTable;
+GO
+CREATE TABLE TestHelpTable (
+    Id INT IDENTITY(1,1) PRIMARY KEY, 
+    Name NVARCHAR(50)
+);
+GO
+
+-- Chạy sp_help để phân tích cấu trúc bảng vừa tạo
+EXEC sp_help 'TestHelpTable';
+GO
+
+-- Dọn dẹp
+DROP TABLE TestHelpTable;
+GO
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/df373f8a-0308-4921-8a34-21305c540461" />
+
+2. sp_who2: Xem các session đang hoạt động
+Mục đích: Dùng để theo dõi xem "Ai đang làm gì" trên server SQL. Nó hiển thị các luồng xử lý (process), người dùng nào đang kết nối, và máy tính nào đang gọi vào DB. Đặc biệt hữu ích để tìm ra lệnh nào đang bị "treo" hoặc gây tắc nghẽn (Block).
+
+Cách dùng:
+
+EXEC sp_who2;: Hiển thị toàn bộ các kết nối (kể cả kết nối đang ngủ - sleeping).
+
+EXEC sp_who2 'active';: Chỉ hiển thị các kết nối đang thực thi truy vấn. Nếu bạn thấy cột BlkBy (Blocked By) có chứa số, tức là tiến trình đó đang bị khóa bởi một tiến trình khác có mã số (SPID) tương ứng.
+-- --------------------------------------------------------------------
+PRINT '--- 2. sp_who2: Xem cac session dang hoat dong ---';
+
+-- Xem tất cả session, tài nguyên sử dụng, trạng thái block
+EXEC sp_who2;
+
+-- Lọc chỉ xem các session đang "active"
+EXEC sp_who2 'active';
+GO
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/f6a9236a-8c88-4d23-ab76-541a0fbe39ef" />
+
+
+3. sp_spaceused: Kiểm tra dung lượng
+Mục đích: Kiểm tra xem dữ liệu đang chiếm bao nhiêu dung lượng trên ổ cứng để có kế hoạch dọn dẹp hoặc nâng cấp.
+
+Cách dùng:
+
+EXEC sp_spaceused;: Cho bạn biết tổng dung lượng của toàn bộ Database hiện tại là bao nhiêu, và còn trống bao nhiêu MB.
+
+EXEC sp_spaceused 'Tên_Bảng';: Cho bạn biết bảng đó có tổng cộng bao nhiêu dòng (rows), dung lượng phần data thực tế là bao nhiêu và dung lượng của các Index trên bảng đó chiếm bao nhiêu.
+-- --------------------------------------------------------------------
+PRINT '--- 3. sp_spaceused: Kiem tra dung luong ---';
+
+-- Xem dung lượng của toàn bộ Database hiện tại
+EXEC sp_spaceused;
+GO
+
+-- Tạo bảng tạm và chèn dữ liệu để kiểm tra dung lượng bảng
+IF OBJECT_ID('TestSpaceTable', 'U') IS NOT NULL DROP TABLE TestSpaceTable;
+GO
+CREATE TABLE TestSpaceTable (Id INT, Data NVARCHAR(MAX));
+INSERT INTO TestSpaceTable (Id, Data) VALUES (1, 'Some test data');
+GO
+
+-- Xem kích thước và số dòng của bảng TestSpaceTable
+EXEC sp_spaceused 'TestSpaceTable';
+GO
+
+-- Dọn dẹp
+DROP TABLE TestSpaceTable;
+GO
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/645cb124-cbca-41b7-b38d-7c2baa12376b" />
+
+4. sp_helptext: Xem mã nguồn (source code)
+Mục đích: Khi bạn muốn đọc code bên trong của một đối tượng có chứa logic (như View, Stored Procedure, Trigger, Function) do người khác viết để hiểu cách nó hoạt động.
+
+Cách dùng:
+
+EXEC sp_helptext 'Tên_Procedure_Hoac_View';: Lệnh này sẽ in ra toàn bộ đoạn code T-SQL nguyên gốc đã được dùng để tạo ra đối tượng đó. (Lưu ý: Không dùng được với Table, và không xem được nếu lúc tạo người viết đã dùng tùy chọn WITH ENCRYPTION để mã hóa bảo mật).
+-- --------------------------------------------------------------------
+PRINT '--- 4. sp_helptext: Xem ma nguon (source code) ---';
+
+-- Tạo một Stored Procedure mẫu
+IF OBJECT_ID('usp_DummySP', 'P') IS NOT NULL DROP PROCEDURE usp_DummySP;
+GO
+CREATE PROCEDURE usp_DummySP
+AS
+BEGIN
+    -- Đây là nội dung của SP mẫu
+    SELECT GETDATE() AS CurrentDateTime;
+END;
+GO
+
+-- Chạy sp_helptext để xem lại mã nguồn của SP vừa tạo
+EXEC sp_helptext 'usp_DummySP';
+GO
+
+-- Dọn dẹp
+DROP PROCEDURE usp_DummySP;
+GO
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/99178d91-9d49-41e8-aa31-84f2b49567e2" />
+
+  ## + Viết 01 Store Procedure đơn giản để thực hiện lệnh INSERT hoặc UPDATE dữ liệu, có kiểm tra điều kiện logic (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ)
+  KỊCH BẢN: STORED PROCEDURE QUẢN LÝ ĐIỂM SINH VIÊN
+1. Mô tả bài toán và Yêu cầu nghiệp vụ
+
+Mục tiêu: Xây dựng một thủ tục lưu trữ (Stored Procedure) để tự động hóa quá trình nhập điểm thi cho sinh viên.
+
+Yêu cầu logic: * Điểm số hợp lệ phải nằm trong khoảng từ 0 đến 10.
+
+Hệ thống phải chấp nhận trạng thái "Chưa có điểm" (tương ứng với giá trị NULL) khi sinh viên mới đăng ký môn nhưng chưa thi.
+
+Cơ chế Upsert tự động: Nếu sinh viên chưa có thông tin điểm môn học -> Thêm mới (INSERT). Nếu sinh viên đã có thông tin trước đó (thi lại, phúc khảo, hoặc cập nhật từ trạng thái chưa thi) -> Cập nhật dữ liệu (UPDATE).
+
+2. Cấu trúc cơ sở dữ liệu
+
+Tạo bảng DiemSinhVien gồm 3 cột: MaSV (Mã sinh viên), MaMonHoc (Mã môn học) và DiemSo (Điểm số, kiểu FLOAT, cho phép NULL).
+
+Khóa chính kép (Primary Key) được thiết lập trên hai cột (MaSV, MaMonHoc) để đảm bảo mỗi sinh viên chỉ có một bản ghi điểm duy nhất cho mỗi môn học.
+
+3. Logic xử lý của Stored Procedure (usp_NhapDiemThi)
+
+Tham số đầu vào: Nhận 3 tham số @MaSV, @MaMonHoc và tham số tùy chọn @DiemSo (mặc định là NULL).
+
+Bước 1 - Kiểm tra tính hợp lệ (Validation): Sử dụng câu lệnh IF để bắt lỗi. Nếu điểm được truyền vào (khác NULL) mà nằm ngoài khoảng 0 - 10, thủ tục sẽ in ra thông báo lỗi và dùng lệnh RETURN để dừng thực thi ngay lập tức.
+
+Bước 2 - Kiểm tra tồn tại và rẽ nhánh (Upsert): Sử dụng hàm EXISTS để dò tìm trong bảng.
+
+Nếu tìm thấy bản ghi khớp Mã SV và Mã Môn: Chạy lệnh UPDATE để ghi đè điểm mới.
+
+Nếu không tìm thấy: Chạy lệnh INSERT để tạo bản ghi điểm hoàn toàn mới.
+
+Điểm cộng: Tích hợp thêm lệnh PRINT phân biệt rõ ràng thông báo giữa việc cập nhật "điểm số" và trạng thái "chưa có điểm" để người dùng dễ theo dõi.
+
+4. Kịch bản kiểm thử (Test Cases)
+Đoạn mã bao gồm 5 trường hợp kiểm thử bám sát thực tế:
+
+Test Case 1: Nhập điểm hợp lệ cho sinh viên mới (Kỳ vọng: INSERT thành công).
+
+Test Case 2: Sửa điểm cho sinh viên đã thi (Kỳ vọng: UPDATE thành công điểm mới).
+
+Test Case 3 & 4 (Lỗi logic): Nhập điểm lớn hơn 10 hoặc nhỏ hơn 0 (Kỳ vọng: Bị hệ thống chặn lại và báo lỗi).
+
+Test Case 5: Sinh viên đăng ký môn nhưng chưa có điểm (Kỳ vọng: INSERT thành công với giá trị NULL).
+
+Test Case 6: Sinh viên đang có điểm nhưng bị hủy kết quả (Kỳ vọng: UPDATE điểm hiện tại về trạng thái NULL).
+
+5. Kết xuất dữ liệu
+
+Sử dụng câu lệnh SELECT kết hợp cấu trúc CASE...WHEN (hoặc ISNULL) để hiển thị dữ liệu thân thiện với người dùng (Biến giá trị NULL khô khan trong database thành chuỗi text "Chưa có điểm" trên giao diện báo cáo).
+
+-- ====================================================================
+-- BÀI TOÁN: QUẢN LÝ ĐIỂM THI CỦA SINH VIÊN
+-- Yêu cầu: Viết SP nhập điểm. Điểm phải từ 0-10. 
+-- Cho phép trường hợp "Chưa có điểm" (NULL).
+-- Nếu đã có điểm thì UPDATE, chưa có thì INSERT.
+-- ====================================================================
+
+-- 1. TẠO BẢNG DỮ LIỆU MẪU
+IF OBJECT_ID('DiemSinhVien', 'U') IS NOT NULL DROP TABLE DiemSinhVien;
+GO
+CREATE TABLE DiemSinhVien (
+    MaSV VARCHAR(10),
+    MaMonHoc VARCHAR(10),
+    DiemSo FLOAT NULL, -- Cho phép NULL để thể hiện trạng thái "chưa có điểm"
+    PRIMARY KEY (MaSV, MaMonHoc) -- Khóa chính kép gồm Mã SV và Mã Môn
+);
+GO
+
+-- 2. VIẾT STORED PROCEDURE THEO YÊU CẦU
+IF OBJECT_ID('usp_NhapDiemThi', 'P') IS NOT NULL DROP PROCEDURE usp_NhapDiemThi;
+GO
+CREATE PROCEDURE usp_NhapDiemThi
+    @MaSV VARCHAR(10),
+    @MaMonHoc VARCHAR(10),
+    @DiemSo FLOAT = NULL -- Có thể không truyền điểm (mặc định là NULL)
+AS
+BEGIN
+    -- [A] KIỂM TRA ĐIỀU KIỆN LOGIC
+    -- Nếu có truyền điểm vào thì phải nằm trong khoảng 0 - 10
+    IF @DiemSo IS NOT NULL AND (@DiemSo < 0 OR @DiemSo > 10)
+    BEGIN
+        PRINT N'⛔ LỖI: Điểm số không hợp lệ! Vui lòng nhập điểm từ 0 đến 10.';
+        RETURN; -- Dừng thực thi SP ngay lập tức
+    END
+
+    -- [B] KIỂM TRA ĐỂ QUYẾT ĐỊNH INSERT HAY UPDATE
+    IF EXISTS (SELECT 1 FROM DiemSinhVien WHERE MaSV = @MaSV AND MaMonHoc = @MaMonHoc)
+    BEGIN
+        -- Nếu Sinh viên đã tồn tại trong môn này -> Thực hiện UPDATE
+        UPDATE DiemSinhVien
+        SET DiemSo = @DiemSo
+        WHERE MaSV = @MaSV AND MaMonHoc = @MaMonHoc;
+        
+        IF @DiemSo IS NULL
+            PRINT N'✅ THÀNH CÔNG: Đã CẬP NHẬT trạng thái "Chưa có điểm" cho sinh viên ' + @MaSV;
+        ELSE
+            PRINT N'✅ THÀNH CÔNG: Đã CẬP NHẬT điểm mới cho sinh viên ' + @MaSV;
+    END
+    ELSE
+    BEGIN
+        -- Nếu Sinh viên chưa có trong môn này -> Thực hiện INSERT
+        INSERT INTO DiemSinhVien (MaSV, MaMonHoc, DiemSo)
+        VALUES (@MaSV, @MaMonHoc, @DiemSo);
+        
+        IF @DiemSo IS NULL
+            PRINT N'✅ THÀNH CÔNG: Đã đăng ký môn học cho sinh viên ' + @MaSV + N' (Chưa có điểm).';
+        ELSE
+            PRINT N'✅ THÀNH CÔNG: Đã THÊM MỚI điểm cho sinh viên ' + @MaSV;
+    END
+END;
+GO
+
+-- 3. CHẠY THỬ NGHIỆM (TEST CASES)
+PRINT '--- KET QUA TEST ---';
+
+-- Trường hợp 1: Thêm mới bình thường
+EXEC usp_NhapDiemThi @MaSV = 'SV001', @MaMonHoc = 'SQL', @DiemSo = 8.5;
+
+-- Trường hợp 2: Cập nhật điểm
+EXEC usp_NhapDiemThi @MaSV = 'SV001', @MaMonHoc = 'SQL', @DiemSo = 9.5;
+
+-- Trường hợp 3: Bị chặn bởi điều kiện logic (LỖI - Nhập quá 10 điểm)
+EXEC usp_NhapDiemThi @MaSV = 'SV002', @MaMonHoc = 'JAVA', @DiemSo = 12.0;
+
+-- Trường hợp 4: Thêm mới nhưng CHƯA CÓ ĐIỂM (Bỏ trống DiemSo)
+EXEC usp_NhapDiemThi @MaSV = 'SV004', @MaMonHoc = 'PYTHON'; 
+
+-- Trường hợp 5: Đang có điểm nhưng bị hủy, cập nhật thành CHƯA CÓ ĐIỂM
+EXEC usp_NhapDiemThi @MaSV = 'SV001', @MaMonHoc = 'JAVA', @DiemSo = 5.0; -- Nhập lúc đầu
+EXEC usp_NhapDiemThi @MaSV = 'SV001', @MaMonHoc = 'JAVA', @DiemSo = NULL; -- Sau đó cập nhật lại thành chưa có điểm
+
+PRINT '';
+PRINT '--- BANG DU LIEU CHINH THUC ---';
+-- Dùng hàm CASE hoặc ISNULL để biến đổi giá trị NULL thành chữ "Chưa có điểm" khi hiển thị
+SELECT 
+    MaSV, 
+    MaMonHoc, 
+    CASE 
+        WHEN DiemSo IS NULL THEN N'Chưa có điểm' 
+        ELSE CAST(DiemSo AS VARCHAR(10)) 
+    END AS DiemSo
+FROM DiemSinhVien;
+GO
+
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/2a172843-447d-4a86-bda7-bc1377bbfb1b" />
+        
+        Kết quả thực thi Stored Procedure quản lý điểm sinh viên trên SSMS.
+
+  ## + Viết 01 Store Procedure có sử dụng tham số OUTPUT để trả về một giá trị tính toán (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ, SP NÀY CÓ DÙNG THAM SỐ LOẠI OUTPUT)
+
+  ## + Viết 01 Store Procedure trả về một tập kết quả (Result set) từ lệnh SELECT sau khi đã join nhiều bảng. (SV TỰ NGHĨ RA YÊU CẦU CỦA SP VÀ VIẾT SP GIẢI QUYẾT NÓ)
 
 ### Phần 4: Trigger và Xử lý logic nghiệp vụ (Kiến thức 11)
 
